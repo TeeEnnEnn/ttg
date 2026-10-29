@@ -5,5 +5,6 @@ const ttg = @import("ttg");
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
-    try ttg.Generator.generate(allocator, 1);
+    const io = init.io;
+    try ttg.Generator.generate(allocator, io, 1);
 }
