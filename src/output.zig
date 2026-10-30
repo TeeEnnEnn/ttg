@@ -19,7 +19,7 @@ fn make_directory(io: std.Io, allocator: std.mem.Allocator, cwd: std.Io.Dir) ![:
     return output_dir_path;
 }
 
-pub fn to_html(io: std.Io, allocator: std.mem.Allocator, map: *[MAP_SIZE][MAP_SIZE]Biome) !void {
+pub fn to_html(io: std.Io, allocator: std.mem.Allocator, map: *[]Biome) !void {
     const cwd = std.Io.Dir.cwd();
     const output_dir_path = try make_directory(io, allocator, cwd);
 
@@ -47,15 +47,15 @@ pub fn to_html(io: std.Io, allocator: std.mem.Allocator, map: *[MAP_SIZE][MAP_SI
     try w.writeAll(file_header);
     try w.writeAll(div_open);
 
-    for (0..MAP_SIZE) |y| {
-        for (0..MAP_SIZE) |x| {
-            const color = biome_color(map[y][x]);
-            const this_div = try std.mem.Allocator.print(allocator,
-                \\ <div style="background: rgb({d}, {d}, {d}); min-width:2px; min-height:2px;"></div>
-            , .{ color.r, color.g, color.b });
-            try w.writeAll(this_div);
-        }
-        try w.writeByte('\n');
+    for (0..MAP_SIZE * MAP_SIZE) |i| {
+        const y: usize = i / MAP_SIZE;
+        const x: usize = i % MAP_SIZE;
+
+        const color = biome_color(map.*[y * MAP_SIZE + x]);
+        const this_div = try std.mem.Allocator.print(allocator,
+            \\ <div style="background: rgb({d}, {d}, {d}); min-width:2px; min-height:2px;"></div>
+        , .{ color.r, color.g, color.b });
+        try w.writeAll(this_div);
     }
 
     const file_footer =
@@ -70,7 +70,7 @@ pub fn to_html(io: std.Io, allocator: std.mem.Allocator, map: *[MAP_SIZE][MAP_SI
     out_file.close(io);
 }
 
-pub fn to_ppm_3(io: std.Io, allocator: std.mem.Allocator, map: *[MAP_SIZE][MAP_SIZE]Biome) !void {
+pub fn to_ppm_3(io: std.Io, allocator: std.mem.Allocator, map: *[]Biome) !void {
     const cwd = std.Io.Dir.cwd();
     const output_dir_path = try make_directory(io, allocator, cwd);
 
@@ -87,19 +87,20 @@ pub fn to_ppm_3(io: std.Io, allocator: std.mem.Allocator, map: *[MAP_SIZE][MAP_S
 
     try w.writeAll(file_header);
 
-    for (0..MAP_SIZE) |y| {
-        for (0..MAP_SIZE) |x| {
-            const color = biome_color(map[y][x]);
-            const this_px = try std.mem.Allocator.print(allocator, "{d} {d} {d}\n", .{ color.r, color.g, color.b });
-            try w.writeAll(this_px);
-        }
+    for (0..MAP_SIZE * MAP_SIZE) |i| {
+        const y: usize = i / MAP_SIZE;
+        const x: usize = i % MAP_SIZE;
+
+        const color = biome_color(map.*[y * MAP_SIZE + x]);
+        const this_px = try std.mem.Allocator.print(allocator, "{d} {d} {d}\n", .{ color.r, color.g, color.b });
+        try w.writeAll(this_px);
     }
 
     try w.flush();
     out_file.close(io);
 }
 
-pub fn to_ppm_6(io: std.Io, allocator: std.mem.Allocator, map: *[MAP_SIZE][MAP_SIZE]Biome) !void {
+pub fn to_ppm_6(io: std.Io, allocator: std.mem.Allocator, map: *[]Biome) !void {
     const cwd = std.Io.Dir.cwd();
     const output_dir_path = try make_directory(io, allocator, cwd);
 
@@ -116,13 +117,14 @@ pub fn to_ppm_6(io: std.Io, allocator: std.mem.Allocator, map: *[MAP_SIZE][MAP_S
 
     try w.writeAll(file_header);
 
-    for (0..MAP_SIZE) |y| {
-        for (0..MAP_SIZE) |x| {
-            const color = biome_color(map[y][x]);
-            try w.writeByte(color.r);
-            try w.writeByte(color.g);
-            try w.writeByte(color.b);
-        }
+    for (0..MAP_SIZE * MAP_SIZE) |i| {
+        const y: usize = i / MAP_SIZE;
+        const x: usize = i % MAP_SIZE;
+
+        const color = biome_color(map.*[y * MAP_SIZE + x]);
+        try w.writeByte(color.r);
+        try w.writeByte(color.g);
+        try w.writeByte(color.b);
     }
 
     try w.flush();
