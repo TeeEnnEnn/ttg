@@ -5,6 +5,7 @@ pub const Biome = enum(u2) {
     WATER,
     LAND,
     FOREST,
+    BEACH,
 };
 
 pub const RGB = struct { r: u8, g: u8, b: u8 };
@@ -14,5 +15,6 @@ pub fn biome_color(b: Biome) RGB {
         .LAND => .{ .r = 171, .g = 115, .b = 79 },
         .WATER => .{ .r = 52, .g = 110, .b = 235 },
         .FOREST => .{ .r = 0, .g = 145, .b = 0 },
+        .BEACH => .{ .r = 235, .g = 213, .b = 152 },
     };
 }
