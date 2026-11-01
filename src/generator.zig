@@ -19,25 +19,38 @@ fn biome(sea_level: f64, forest_level: f64, elevation: f64, moisture: f64) Biome
 }
 
 fn generate_seed(world_seed: u32, seed_type: SeedType) u32 {
-    const f_world_seed: f64 = @floatFromInt(world_seed);
+    const x: f64 = @floatFromInt(world_seed);
     return switch (seed_type) {
+        // elevation seed, from README:
+        //   ( cos(sin(x))^-1 * sin(x) * e*x + 123 )
+        //   ---------------------------------------
+        //   ( tan(x^3 - x^2 - x) * cos(x) + 23 )
         .elevation => safe_seed(
-            std.math.cos(f_world_seed) * std.math.atan(f_world_seed) * std.math.sin(f_world_seed * std.math.e) * f_world_seed,
+            (1.0 / std.math.cos(std.math.sin(x)) * std.math.sin(x) * (x * std.math.e) + 123.0) /
+                (std.math.tan(x * x * x - x * x - x) * std.math.cos(x) + 23.0),
         ),
+        // moisture seed, from README:
+        //   ( cos(tan(x))^-1 * tan(x) * e*x + 123 )
+        //   ---------------------------------------
+        //   ( sin(x^3 - x^2 - x) * tan(x) + 23 )
         .moisture => safe_seed(
-            std.math.asin(std.math.sin(f_world_seed)) * std.math.tan(f_world_seed) * std.math.acos(std.math.cos(f_world_seed * std.math.e)) * f_world_seed,
+            (1.0 / std.math.cos(std.math.tan(x)) * std.math.tan(x) * (x * std.math.e) + 123.0) /
+                (std.math.sin(x * x * x - x * x - x) * std.math.tan(x) + 23.0),
         ),
     };
 }
 
-// The seed formulas have two failure modes that would panic on the u32 cast:
-//  1. The result can be negative (cos/sin change sign per seed)
-//  2. The result can be NaN (asin/acos only accept inputs in [-1, 1])
-// Instead of panicking, fold both into a valid u32 seed:
-//  - NaN -> 0
+// AI says:
+// The seed formulas mix trig functions and division, which introduce two
+// failure modes that would panic on the u32 cast:
+//  1. The result can be negative or huge (cos/sin change sign, tan grows)
+//  2. The result can be non-finite (zero denominators, or 1/cos(t) with t
+//     landing on a cos zero)
+// Instead of panicking, fold bad cases into valid u32 seeds:
+//  - non-finite (NaN / +/-inf) -> 0
 //  - anything else -> wrapped into [0, 2^32) with a float modulo
 fn safe_seed(raw: f64) u32 {
-    if (std.math.isNan(raw)) return 0;
+    if (!std.math.isFinite(raw)) return 0;
     return @intFromFloat(@mod(@trunc(raw), 4294967296.0));
 }
 
@@ -114,7 +127,7 @@ pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void
 
     // writing the output to a file
     try Output.to_ppm_6(io, allocator, biome_points);
-    try Output.to_ply(io, allocator, biome_points);
+    try Output.to_ply(io, allocator, biome_points, elevation);
 }
 
 fn less_than(nothing: @TypeOf(.{}), a: f64, b: f64) bool {

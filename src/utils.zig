@@ -18,3 +18,5 @@ pub fn biome_color(b: Biome) RGB {
         .BEACH => .{ .r = 235, .g = 213, .b = 152 },
     };
 }
+
+pub const Z_SCALE: f64 = 150.0;
