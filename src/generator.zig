@@ -6,12 +6,13 @@ const Utils = @import("utils.zig");
 const Biome = Utils.Biome;
 const MAP_SIZE = Utils.MAP_SIZE;
 const F_MAP_SIZE = Utils.F_MAP_SIZE;
+const TTGConfig = Utils.TTGConfig;
 
 const SeedType = enum { elevation, moisture };
 
-fn biome(sea_level: f64, forest_level: f64, elevation: f64, moisture: f64) Biome {
+fn biome(sea_level: f64, forest_level: f64, elevation: f64, moisture: f64, beach_threshold: f64) Biome {
     if (elevation < sea_level) return .WATER;
-    if (elevation < sea_level + sea_level * 0.1) return .BEACH;
+    if (elevation < sea_level + sea_level * beach_threshold) return .BEACH;
     if (moisture > forest_level) {
         return .FOREST;
     }
@@ -36,26 +37,19 @@ fn generate_seed(world_seed: u32, seed_type: SeedType) u32 {
     };
 }
 
-// AI says:
-// The seed formulas mix trig functions and division, which introduce two
-// failure modes that would panic on the u32 cast:
-//  1. The result can be negative or huge (cos/sin change sign, tan grows)
-//  2. The result can be non-finite (zero denominators, or 1/cos(t) with t
-//     landing on a cos zero)
-// Instead of panicking, fold bad cases into valid u32 seeds:
-//  - non-finite (NaN / +/-inf) -> 0
-//  - anything else -> wrapped into [0, 2^32) with a float modulo
-fn safe_seed(raw: f64) u32 {
-    if (!std.math.isFinite(raw)) return 0;
-    return @intFromFloat(@mod(@trunc(raw), 4294967296.0));
-}
+pub fn generate(allocator: std.mem.Allocator, io: std.Io, config: TTGConfig) !void {
+    const elevation_seed = generate_seed(config.world_seed, .elevation);
+    const moisture_seed = generate_seed(config.world_seed, .moisture);
 
-pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void {
-    const elevation_seed = generate_seed(world_seed, .elevation);
-    const moisture_seed = generate_seed(world_seed, .moisture);
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
+    const w = &stdout_writer.interface;
 
-    std.debug.print("elevation seed: {d}\n", .{elevation_seed});
-    std.debug.print("moisture seed: {d}\n", .{moisture_seed});
+    try w.print("elevation seed: {d}\n", .{elevation_seed});
+    try w.print("moisture seed: {d}\n", .{moisture_seed});
+    try w.flush();
+
+    std.Io.File.stdout().close(io);
 
     var elevation_perlin = try Perlin3d.PerlinGenerator.init(allocator, elevation_seed);
     var moisture_perlin = try Perlin3d.PerlinGenerator.init(allocator, moisture_seed);
@@ -67,7 +61,7 @@ pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void
     var moisture: []f64 = try allocator.alloc(f64, @intCast(MAP_SIZE * MAP_SIZE));
     defer allocator.free(moisture);
 
-    const frequency: f64 = 3;
+    const frequency: f64 = config.frequency;
     const wavelength = F_MAP_SIZE / frequency;
 
     const fudge_factor = 1.5;
@@ -76,10 +70,10 @@ pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void
     const m_fudge_factor = 1.25;
     const m_exponent: f64 = 2.75;
 
-    elevation_perlin.octaves = 8;
-    elevation_perlin.falloff = 0.25;
-    moisture_perlin.octaves = 2;
-    moisture_perlin.falloff = 0.65;
+    elevation_perlin.octaves = config.elevation_octaves;
+    elevation_perlin.falloff = config.elevation_falloff;
+    moisture_perlin.octaves = config.moisture_octaves;
+    moisture_perlin.falloff = config.moisture_falloff;
 
     for (0..MAP_SIZE * MAP_SIZE) |i| {
         const y: usize = i / MAP_SIZE;
@@ -103,7 +97,10 @@ pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void
     @memcpy(biome_elevation, elevation);
     std.sort.block(f64, biome_elevation, .{}, less_than);
 
-    const biome_cuttoff_percentile: usize = @trunc(((F_MAP_SIZE * F_MAP_SIZE) * 0.15));
+    const biome_cuttoff_percentile: usize = @min(
+        @as(usize, @trunc(((F_MAP_SIZE * F_MAP_SIZE) * config.allowed_water_percentile))),
+        MAP_SIZE * MAP_SIZE - 1,
+    );
     const biome_cutoff = biome_elevation[biome_cuttoff_percentile];
 
     const moisture_elevation = try allocator.alloc(f64, @intCast(MAP_SIZE * MAP_SIZE));
@@ -112,13 +109,16 @@ pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void
     std.sort.block(f64, moisture_elevation, .{}, less_than);
 
     // should at least be > 0.5
-    const moisture_cuttoff_percentile: usize = @trunc(((F_MAP_SIZE * F_MAP_SIZE) * 0.85));
+    const moisture_cuttoff_percentile: usize = @min(
+        @as(usize, @trunc(((F_MAP_SIZE * F_MAP_SIZE) * config.allowed_forest_percentile))),
+        MAP_SIZE * MAP_SIZE - 1,
+    );
     const moisture_cutoff = moisture_elevation[moisture_cuttoff_percentile];
 
     for (0..MAP_SIZE * MAP_SIZE) |i| {
         const y: usize = i / MAP_SIZE;
         const x: usize = i % MAP_SIZE;
-        biome_points[y * MAP_SIZE + x] = biome(biome_cutoff, moisture_cutoff, elevation[y * MAP_SIZE + x], moisture[y * MAP_SIZE + x]);
+        biome_points[y * MAP_SIZE + x] = biome(biome_cutoff, moisture_cutoff, elevation[y * MAP_SIZE + x], moisture[y * MAP_SIZE + x], config.beach_threshold);
     }
 
     // writing the output to a file

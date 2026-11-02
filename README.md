@@ -28,6 +28,4 @@ Thank you to Red Blob Games and vExcess.
 ### How I used AI for this
 
 - ai was used to aid implementation - not take over. I used Opencode with GLM-5.3-Flash Free.
-- It gave me the safe_seed() function
-- It also wrote out the seed functions because I was too lazy to convert them from latex (which I got from desmos) to zig code
-- It also give me the face mesh rendering code for the .ply file
+- It gave me the face mesh rendering code for the .ply file
