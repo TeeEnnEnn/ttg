@@ -117,12 +117,12 @@ pub fn to_ply(io: std.Io, allocator: std.mem.Allocator, biome_map: []Biome, heig
 
             try w.writeByte(3); // number of vertices in a triangle - the count
             try w.writeAll(&std.mem.toBytes(A));
-            try w.writeAll(&std.mem.toBytes(C));
             try w.writeAll(&std.mem.toBytes(E));
+            try w.writeAll(&std.mem.toBytes(C));
             try w.writeByte(3); // number of vertices in a triangle - the count
             try w.writeAll(&std.mem.toBytes(A));
-            try w.writeAll(&std.mem.toBytes(E));
             try w.writeAll(&std.mem.toBytes(D));
+            try w.writeAll(&std.mem.toBytes(E));
         }
     }
     try w.flush();

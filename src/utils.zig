@@ -19,4 +19,4 @@ pub fn biome_color(b: Biome) RGB {
     };
 }
 
-pub const Z_SCALE: f64 = 150.0;
+pub const Z_SCALE: f64 = 200.0;

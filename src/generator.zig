@@ -19,24 +19,20 @@ fn biome(sea_level: f64, forest_level: f64, elevation: f64, moisture: f64) Biome
 }
 
 fn generate_seed(world_seed: u32, seed_type: SeedType) u32 {
-    const x: f64 = @floatFromInt(world_seed);
+    var wyhash = std.hash.Wyhash.init(world_seed);
+    const final: u64 = wyhash.final();
+
     return switch (seed_type) {
-        // elevation seed, from README:
-        //   ( cos(sin(x))^-1 * sin(x) * e*x + 123 )
-        //   ---------------------------------------
-        //   ( tan(x^3 - x^2 - x) * cos(x) + 23 )
-        .elevation => safe_seed(
-            (1.0 / std.math.cos(std.math.sin(x)) * std.math.sin(x) * (x * std.math.e) + 123.0) /
-                (std.math.tan(x * x * x - x * x - x) * std.math.cos(x) + 23.0),
-        ),
-        // moisture seed, from README:
-        //   ( cos(tan(x))^-1 * tan(x) * e*x + 123 )
-        //   ---------------------------------------
-        //   ( sin(x^3 - x^2 - x) * tan(x) + 23 )
-        .moisture => safe_seed(
-            (1.0 / std.math.cos(std.math.tan(x)) * std.math.tan(x) * (x * std.math.e) + 123.0) /
-                (std.math.sin(x * x * x - x * x - x) * std.math.tan(x) + 23.0),
-        ),
+        .elevation => blk: {
+            const high: u64 = final >> 32;
+            var elevation_hasher = std.hash.Wyhash.init(high);
+            break :blk @truncate(elevation_hasher.final());
+        },
+        .moisture => blk: {
+            const low: u64 = @intCast(final & 0xFFFFFFFF);
+            var moisture_hasher = std.hash.Wyhash.init(low);
+            break :blk @truncate(moisture_hasher.final());
+        },
     };
 }
 
@@ -107,8 +103,8 @@ pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void
     @memcpy(biome_elevation, elevation);
     std.sort.block(f64, biome_elevation, .{}, less_than);
 
-    const biome_cuttoff_quartile: usize = @trunc(((F_MAP_SIZE * F_MAP_SIZE) * 0.33));
-    const biome_cutoff = biome_elevation[biome_cuttoff_quartile];
+    const biome_cuttoff_percentile: usize = @trunc(((F_MAP_SIZE * F_MAP_SIZE) * 0.15));
+    const biome_cutoff = biome_elevation[biome_cuttoff_percentile];
 
     const moisture_elevation = try allocator.alloc(f64, @intCast(MAP_SIZE * MAP_SIZE));
     defer allocator.free(moisture_elevation);
@@ -116,8 +112,8 @@ pub fn generate(allocator: std.mem.Allocator, io: std.Io, world_seed: u32) !void
     std.sort.block(f64, moisture_elevation, .{}, less_than);
 
     // should at least be > 0.5
-    const moisture_cuttoff_quartile: usize = @trunc(((F_MAP_SIZE * F_MAP_SIZE) * 0.8));
-    const moisture_cutoff = moisture_elevation[moisture_cuttoff_quartile];
+    const moisture_cuttoff_percentile: usize = @trunc(((F_MAP_SIZE * F_MAP_SIZE) * 0.85));
+    const moisture_cutoff = moisture_elevation[moisture_cuttoff_percentile];
 
     for (0..MAP_SIZE * MAP_SIZE) |i| {
         const y: usize = i / MAP_SIZE;
