@@ -14,7 +14,7 @@ Linux (the only platform I have tested this on)
 git clone git@github.com:TeeEnnEnn/ttg.git
 cd ttg
 zig build
-./zig-out/bin/ttg <seed>
+./zig-out/bin/ttg
 ```
 
 On my system (Ryzen 7600, arch linux) this takes 2s to run with a MAP_SIZE of 1000 and outputs a 3MB ppm and a 41MB PLY. 
